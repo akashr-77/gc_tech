@@ -1,0 +1,305 @@
+name: Build & Deploy to Azure Container Apps
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  REGISTRY: ${{ secrets.ACR_LOGIN_SERVER }}
+  RESOURCE_GROUP: manhattan-rg
+  CONTAINER_APP_ENV: manhattan-env
+
+jobs:
+  # ─── Job 1: Build all Docker images and push to ACR ─────────────────────────
+  build-and-push:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # required for OIDC login to Azure
+    outputs:
+      image-tag: ${{ steps.tag.outputs.TAG }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Log in to ACR
+        # ACR_LOGIN_SERVER may be in the form "myacr.azurecr.io" — az acr login
+        # needs just the registry name, so we strip the domain suffix.
+        run: az acr login --name "${{ secrets.ACR_LOGIN_SERVER }%%.*}"
+
+      - name: Set image tag
+        id: tag
+        run: echo "TAG=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── mcp-server ────────────────────────────────────────────────────────────
+      - name: Build & push mcp-server
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./mcp_server/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/mcp-server:${{ steps.tag.outputs.TAG }}
+            ${{ env.REGISTRY }}/mcp-server:latest
+          cache-from: type=gha,scope=mcp-server
+          cache-to: type=gha,mode=max,scope=mcp-server
+
+      # ── registry ──────────────────────────────────────────────────────────────
+      - name: Build & push registry
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./registry/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/registry:${{ steps.tag.outputs.TAG }}
+            ${{ env.REGISTRY }}/registry:latest
+          cache-from: type=gha,scope=registry
+          cache-to: type=gha,mode=max,scope=registry
+
+      # ── venue-agent ───────────────────────────────────────────────────────────
+      - name: Build & push venue-agent
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./agents/venue_agent/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/venue-agent:${{ steps.tag.outputs.TAG }}
+            ${{ env.REGISTRY }}/venue-agent:latest
+          cache-from: type=gha,scope=venue-agent
+          cache-to: type=gha,mode=max,scope=venue-agent
+
+      # ── pricing-agent ─────────────────────────────────────────────────────────
+      - name: Build & push pricing-agent
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./agents/pricing_agent/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/pricing-agent:${{ steps.tag.outputs.TAG }}
+            ${{ env.REGISTRY }}/pricing-agent:latest
+          cache-from: type=gha,scope=pricing-agent
+          cache-to: type=gha,mode=max,scope=pricing-agent
+
+      # ── sponsor-agent ─────────────────────────────────────────────────────────
+      - name: Build & push sponsor-agent
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./agents/sponsor_agent/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/sponsor-agent:${{ steps.tag.outputs.TAG }}
+            ${{ env.REGISTRY }}/sponsor-agent:latest
+          cache-from: type=gha,scope=sponsor-agent
+          cache-to: type=gha,mode=max,scope=sponsor-agent
+
+      # ── speaker-agent ─────────────────────────────────────────────────────────
+      - name: Build & push speaker-agent
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./agents/speaker_agent/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/speaker-agent:${{ steps.tag.outputs.TAG }}
+            ${{ env.REGISTRY }}/speaker-agent:latest
+          cache-from: type=gha,scope=speaker-agent
+          cache-to: type=gha,mode=max,scope=speaker-agent
+
+      # ── exhibitor-agent ───────────────────────────────────────────────────────
+      - name: Build & push exhibitor-agent
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./agents/exhibitor_agent/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/exhibitor-agent:${{ steps.tag.outputs.TAG }}
+            ${{ env.REGISTRY }}/exhibitor-agent:latest
+          cache-from: type=gha,scope=exhibitor-agent
+          cache-to: type=gha,mode=max,scope=exhibitor-agent
+
+      # ── community-agent ───────────────────────────────────────────────────────
+      - name: Build & push community-agent
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./agents/community_agent/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/community-agent:${{ steps.tag.outputs.TAG }}
+            ${{ env.REGISTRY }}/community-agent:latest
+          cache-from: type=gha,scope=community-agent
+          cache-to: type=gha,mode=max,scope=community-agent
+
+      # ── eventops-agent ────────────────────────────────────────────────────────
+      - name: Build & push eventops-agent
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./agents/eventops_agent/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/eventops-agent:${{ steps.tag.outputs.TAG }}
+            ${{ env.REGISTRY }}/eventops-agent:latest
+          cache-from: type=gha,scope=eventops-agent
+          cache-to: type=gha,mode=max,scope=eventops-agent
+
+      # ── frontend ──────────────────────────────────────────────────────────────
+      - name: Build & push frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/frontend:${{ steps.tag.outputs.TAG }}
+            ${{ env.REGISTRY }}/frontend:latest
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+  # ─── Job 2: Deploy to Azure Container Apps ───────────────────────────────────
+  deploy:
+    name: Deploy to Azure Container Apps
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: production
+    permissions:
+      contents: read
+      id-token: write   # required for OIDC login to Azure
+
+    steps:
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Common env vars shared by all backend services
+      - name: Set shared env var string
+        id: shared-env
+        run: |
+          echo "VARS=AZURE_OPENAI_ENDPOINT=${{ secrets.AZURE_OPENAI_ENDPOINT }} \
+            AZURE_OPENAI_API_KEY=${{ secrets.AZURE_OPENAI_API_KEY }} \
+            AZURE_OPENAI_API_VERSION=2024-02-15-preview \
+            AZURE_OPENAI_DEPLOYMENT=${{ secrets.AZURE_OPENAI_DEPLOYMENT }} \
+            AZURE_OPENAI_EMBEDDING_DEPLOYMENT=${{ secrets.AZURE_OPENAI_EMBEDDING_DEPLOYMENT }} \
+            DATABASE_URL=${{ secrets.DATABASE_URL }} \
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }} \
+            POSTGRES_USER=${{ secrets.POSTGRES_USER }} \
+            POSTGRES_DB=${{ secrets.POSTGRES_DB }} \
+            MCP_SERVER_URL=http://mcp-server/sse \
+            REGISTRY_URL=http://registry \
+            VENUE_URL=http://venue-agent \
+            PRICING_URL=http://pricing-agent \
+            SPONSOR_URL=http://sponsor-agent \
+            SPEAKER_URL=http://speaker-agent \
+            EXHIBITOR_URL=http://exhibitor-agent \
+            COMMUNITY_URL=http://community-agent \
+            EVENTOPS_URL=http://eventops-agent" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy mcp-server
+        run: |
+          az containerapp update \
+            --name mcp-server \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.REGISTRY }}/mcp-server:${{ needs.build-and-push.outputs.image-tag }} \
+            --set-env-vars "${{ steps.shared-env.outputs.VARS }}"
+
+      - name: Deploy registry
+        run: |
+          az containerapp update \
+            --name registry \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.REGISTRY }}/registry:${{ needs.build-and-push.outputs.image-tag }} \
+            --set-env-vars "${{ steps.shared-env.outputs.VARS }}"
+
+      - name: Deploy venue-agent
+        run: |
+          az containerapp update \
+            --name venue-agent \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.REGISTRY }}/venue-agent:${{ needs.build-and-push.outputs.image-tag }} \
+            --set-env-vars "${{ steps.shared-env.outputs.VARS }}"
+
+      - name: Deploy pricing-agent
+        run: |
+          az containerapp update \
+            --name pricing-agent \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.REGISTRY }}/pricing-agent:${{ needs.build-and-push.outputs.image-tag }} \
+            --set-env-vars "${{ steps.shared-env.outputs.VARS }}"
+
+      - name: Deploy sponsor-agent
+        run: |
+          az containerapp update \
+            --name sponsor-agent \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.REGISTRY }}/sponsor-agent:${{ needs.build-and-push.outputs.image-tag }} \
+            --set-env-vars "${{ steps.shared-env.outputs.VARS }}"
+
+      - name: Deploy speaker-agent
+        run: |
+          az containerapp update \
+            --name speaker-agent \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.REGISTRY }}/speaker-agent:${{ needs.build-and-push.outputs.image-tag }} \
+            --set-env-vars "${{ steps.shared-env.outputs.VARS }}"
+
+      - name: Deploy exhibitor-agent
+        run: |
+          az containerapp update \
+            --name exhibitor-agent \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.REGISTRY }}/exhibitor-agent:${{ needs.build-and-push.outputs.image-tag }} \
+            --set-env-vars "${{ steps.shared-env.outputs.VARS }}"
+
+      - name: Deploy community-agent
+        run: |
+          az containerapp update \
+            --name community-agent \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.REGISTRY }}/community-agent:${{ needs.build-and-push.outputs.image-tag }} \
+            --set-env-vars "${{ steps.shared-env.outputs.VARS }}"
+
+      - name: Deploy eventops-agent
+        run: |
+          az containerapp update \
+            --name eventops-agent \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.REGISTRY }}/eventops-agent:${{ needs.build-and-push.outputs.image-tag }} \
+            --set-env-vars "${{ steps.shared-env.outputs.VARS }}"
+
+      - name: Deploy frontend
+        run: |
+          az containerapp update \
+            --name frontend \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.REGISTRY }}/frontend:${{ needs.build-and-push.outputs.image-tag }}
+
+      - name: Print frontend URL
+        run: |
+          echo "Frontend URL:"
+          az containerapp show \
+            --name frontend \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query "properties.configuration.ingress.fqdn" \
+            --output tsv | awk '{print "https://" $0}'

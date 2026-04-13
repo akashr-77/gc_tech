@@ -1,0 +1,223 @@
+# All services use python:3.11-slim base images, so `python` is available for healthchecks.
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-conference}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-conference_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql
+      - ./database/002_working_memory.sql:/docker-entrypoint-initdb.d/002_working_memory.sql
+      - ./database/003_procedural_memory.sql:/docker-entrypoint-initdb.d/003_procedural_memory.sql
+      - ./database/005_reactive_checkpoint.sql:/docker-entrypoint-initdb.d/005_reactive_checkpoint.sql
+      - ./database/006_registry.sql:/docker-entrypoint-initdb.d/006_registry.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-conference} -d ${POSTGRES_DB:-conference_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mcp-server:
+    build:
+      context: .
+      dockerfile: ./mcp_server/Dockerfile
+    ports:
+      - "8080:8080"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8080), timeout=5)"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+
+  registry:
+    build:
+      context: .
+      dockerfile: ./registry/Dockerfile
+    ports:
+      - "9000:9000"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 9000), timeout=5)"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+
+  venue-agent:
+    build:
+      context: .
+      dockerfile: ./agents/venue_agent/Dockerfile
+    ports:
+      - "8001:8001"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      registry:
+        condition: service_healthy
+      mcp-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8001), timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  pricing-agent:
+    build:
+      context: .
+      dockerfile: ./agents/pricing_agent/Dockerfile
+    ports:
+      - "8002:8002"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      registry:
+        condition: service_healthy
+      mcp-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8002), timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  sponsor-agent:
+    build:
+      context: .
+      dockerfile: ./agents/sponsor_agent/Dockerfile
+    ports:
+      - "8003:8003"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      registry:
+        condition: service_healthy
+      mcp-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8003), timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  speaker-agent:
+    build:
+      context: .
+      dockerfile: ./agents/speaker_agent/Dockerfile
+    ports:
+      - "8004:8004"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      registry:
+        condition: service_healthy
+      mcp-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8004), timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  exhibitor-agent:
+    build:
+      context: .
+      dockerfile: ./agents/exhibitor_agent/Dockerfile
+    ports:
+      - "8005:8005"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      registry:
+        condition: service_healthy
+      mcp-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8005), timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  community-agent:
+    build:
+      context: .
+      dockerfile: ./agents/community_agent/Dockerfile
+    ports:
+      - "8006:8006"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      registry:
+        condition: service_healthy
+      mcp-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8006), timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  eventops-agent:
+    build:
+      context: .
+      dockerfile: ./agents/eventops_agent/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      registry:
+        condition: service_healthy
+      mcp-server:
+        condition: service_healthy
+      venue-agent:
+        condition: service_healthy
+      pricing-agent:
+        condition: service_healthy
+      sponsor-agent:
+        condition: service_healthy
+      speaker-agent:
+        condition: service_healthy
+      exhibitor-agent:
+        condition: service_healthy
+      community-agent:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    environment:
+      EVENTOPS_API_URL: http://eventops-agent:8000
+    depends_on:
+      - eventops-agent
+
+volumes:
+  pgdata:
