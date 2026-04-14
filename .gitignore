@@ -26,4 +26,3 @@ Thumbs.db
 # Logs
 *.log
 .venv
-dataset/all_events_final.json

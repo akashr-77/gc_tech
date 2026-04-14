@@ -171,6 +171,7 @@ The MCP server exposes tools via SSE at `/sse`. All web tools are **free and req
 | `read_github_repo` | Read a GitHub repo's README or any file |
 | `vector_search` | Semantic search over agent memory |
 | `write_memory` | Store facts in episodic memory |
+| `query_event_dataset` | Search the local JSON event database |
 | `query_venues` | Query structured venue database |
 | `query_sponsors` | Query sponsor database |
 | `query_speakers` | Query speaker database |
@@ -205,7 +206,7 @@ See [`.env.example`](.env.example) for the complete list. Key variables:
 The system seeds the database with:
 - **Procedural rules** (`database/004_seed_memory.sql`): GDPR, medical compliance, budget guidelines, sponsorship policies, DEI requirements
 - **Episodic memories** (`database/004_seed_memory.sql`): Lessons learned from past events (WiFi failures, pricing mistakes, channel strategy)
-- **Reference dataset** (`dataset/dummy_events_dataset.json`): 4 real-world-style events from 2025–2026
+- **Reference dataset** (`dataset/all_events_final.json`): JSON event database used by the MCP server for similar-event lookups
 
 To add more seed data to the vector store after startup, call the `write_memory` MCP tool or use the `vector_search` / `query_past_experiences` tools.
 
@@ -242,7 +243,7 @@ manhattan-project/
 ├── scripts/
 │   └── test_flow.py            # End-to-end test script
 ├── dataset/
-│   └── dummy_events_dataset.json
+│   └── all_events_final.json
 ├── docker-compose.yml
 ├── requirements.txt
 └── .env.example

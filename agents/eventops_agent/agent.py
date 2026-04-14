@@ -58,6 +58,7 @@ EVENTOPS_ALLOWED_TOOLS: list[str] = [
     "write_memory",
     "query_past_experiences",
     "query_guidelines_and_rules",
+    "query_event_dataset",
     # Schedule builder (used directly by EventOps per its workflow)
     "build_schedule",
     # General web research (not domain-specific)
@@ -74,6 +75,9 @@ and manage shared working memory. You must use these tools autonomously to plan 
 
 1. **Discover agents**: Use the `discover_agents` tool to find which specialist agents are
    available (venue, pricing, speaker, sponsor, exhibitor, community, etc.).
+
+    Use the `query_event_dataset` tool when you want similar-event context from the local
+    JSON database before delegating work.
 
 2. **Delegate tasks**: Use the `ask_agent` tool to send questions/tasks to the specialist
    agents you discovered. Each agent is autonomous and will use its own tools and reasoning.

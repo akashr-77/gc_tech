@@ -20,9 +20,8 @@ build/
 .ruff_cache/
 
 # Data / temp
-dataset/
-*.log
 *.tmp
+*.log
 
 # IDE
 .vscode/

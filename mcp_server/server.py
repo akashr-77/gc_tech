@@ -3,6 +3,8 @@ import os
 import json
 import re
 import httpx
+from functools import lru_cache
+from pathlib import Path
 from openai import AsyncAzureOpenAI
 from mcp.server.fastmcp import FastMCP
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -13,13 +15,78 @@ from shared.config import config
 mcp = FastMCP("conference-tools", host="0.0.0.0", port=8080)
 
 DATABASE_URL = config.database_url.replace("postgresql://", "postgresql+asyncpg://")
-engine = create_async_engine(DATABASE_URL)
-session_factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+try:
+    engine = create_async_engine(DATABASE_URL)
+    session_factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+except ModuleNotFoundError:
+    engine = None
+    session_factory = None
 openai_client = AsyncAzureOpenAI(
     azure_endpoint=config.azure_openai_endpoint,
     api_key=config.azure_openai_api_key,
     api_version=config.azure_openai_api_version
 )
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+EVENT_DATASET_PATHS = [
+    PROJECT_ROOT / "dataset" / "all_events_final.json",
+    PROJECT_ROOT / "all_events_final.json",
+]
+
+
+@lru_cache(maxsize=1)
+def _load_event_dataset() -> list[dict]:
+    for path in EVENT_DATASET_PATHS:
+        if not path.exists():
+            continue
+
+        with path.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+
+        if isinstance(data, list):
+            return data
+
+        if isinstance(data, dict):
+            for key in ("events", "items", "data", "results"):
+                candidate = data.get(key)
+                if isinstance(candidate, list):
+                    return candidate
+            return [data]
+
+    raise FileNotFoundError(
+        "Could not find all_events_final.json in dataset/ or the project root"
+    )
+
+
+def _event_matches(event: dict, *, query: str | None = None,
+                   name: str | None = None, category: str | None = None,
+                   country: str | None = None, location: str | None = None,
+                   source: str | None = None, date: str | None = None) -> bool:
+    def _contains(field_value, needle: str) -> bool:
+        return needle.casefold() in str(field_value or "").casefold()
+
+    if query:
+        haystack = " ".join(
+            str(event.get(field, ""))
+            for field in ("name", "description", "category", "location", "country", "source", "url")
+        ).casefold()
+        if query.casefold() not in haystack:
+            return False
+
+    for field_name, field_value in (
+        ("name", name),
+        ("category", category),
+        ("country", country),
+        ("location", location),
+        ("source", source),
+    ):
+        if field_value and not _contains(event.get(field_name), field_value):
+            return False
+
+    if date and str(event.get("date", "")) != date:
+        return False
+
+    return True
 
 # ─── WEB SEARCH ───────────────────────────────────────────────────────────────
 
@@ -474,6 +541,30 @@ async def query_communities(niche: str, platform: str = None,
             ORDER BY member_count DESC
         """), params)
         return [dict(r._mapping) for r in result.fetchall()]
+
+@mcp.tool()
+async def query_event_dataset(query: str = None, name: str = None,
+                              category: str = None, country: str = None,
+                              location: str = None, source: str = None,
+                              date: str = None, limit: int = 20) -> list[dict]:
+    """Query the JSON event database by free-text or field filters."""
+    events = _load_event_dataset()
+    matches = [
+        event for event in events
+        if _event_matches(
+            event,
+            query=query,
+            name=name,
+            category=category,
+            country=country,
+            location=location,
+            source=source,
+            date=date,
+        )
+    ]
+    if limit is None or limit < 0:
+        return matches
+    return matches[:limit]
 
 @mcp.tool()
 async def get_pricing_benchmark(domain: str, geography: str,

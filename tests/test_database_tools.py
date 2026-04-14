@@ -165,6 +165,64 @@ class TestQueryCommunities:
 
 
 # ---------------------------------------------------------------------------
+# query_event_dataset
+# ---------------------------------------------------------------------------
+
+
+class TestQueryEventDataset:
+    """Verify the JSON-backed event database query helper."""
+
+    @pytest.mark.asyncio
+    async def test_filters_by_text_and_fields(self):
+        events = [
+            {
+                "name": "AI Summit 2026",
+                "category": "conference",
+                "country": "US",
+                "location": "San Francisco",
+                "source": "Ticketmaster",
+                "date": "2026-04-12",
+            },
+            {
+                "name": "Summer Music Fest",
+                "category": "music festival",
+                "country": "US",
+                "location": "Austin",
+                "source": "Universe",
+                "date": "2026-06-01",
+            },
+        ]
+
+        with patch("mcp_server.server._load_event_dataset", return_value=events):
+            from mcp_server.server import query_event_dataset
+            results = await query_event_dataset(query="ai", category="conference", limit=5)
+
+        assert len(results) == 1
+        assert results[0]["name"] == "AI Summit 2026"
+
+    @pytest.mark.asyncio
+    async def test_limit_applies_after_filtering(self):
+        events = [
+            {
+                "name": f"Event {idx}",
+                "category": "conference",
+                "country": "US",
+                "location": "New York",
+                "source": "Ticketmaster",
+                "date": f"2026-01-0{idx}",
+            }
+            for idx in range(1, 4)
+        ]
+
+        with patch("mcp_server.server._load_event_dataset", return_value=events):
+            from mcp_server.server import query_event_dataset
+            results = await query_event_dataset(category="conference", limit=2)
+
+        assert len(results) == 2
+        assert results[0]["name"] == "Event 1"
+
+
+# ---------------------------------------------------------------------------
 # get_pricing_benchmark
 # ---------------------------------------------------------------------------
 

@@ -5,6 +5,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY shared/ ./shared/
 COPY mcp_server/ ./mcp_server/
+COPY dataset/all_events_final.json ./dataset/all_events_final.json
 ENV PYTHONPATH=/app
 EXPOSE 8080
 CMD ["python", "mcp_server/server.py"]
