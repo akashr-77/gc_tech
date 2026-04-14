@@ -134,6 +134,16 @@ class CheckpointStore:
             """), {"sid": session_id, "error": error})
             await session.commit()
 
+    async def mark_canceled(self, session_id: str, reason: str) -> None:
+        """Mark an orchestration as canceled by the user."""
+        async with self.session_factory() as session:
+            await session.execute(text("""
+                UPDATE orchestration_checkpoints
+                SET status = 'canceled', error_message = :reason, updated_at = NOW()
+                WHERE session_id = :sid
+            """), {"sid": session_id, "reason": reason})
+            await session.commit()
+
     async def load(self, session_id: str) -> dict | None:
         """Load a checkpoint by session ID. Returns None if not found."""
         async with self.session_factory() as session:
@@ -169,7 +179,7 @@ class CheckpointStore:
                 SELECT session_id, event_input, task_plan, completed_agents,
                        agent_outputs, status, current_agent, started_at
                 FROM orchestration_checkpoints
-                WHERE status NOT IN ('completed', 'failed')
+                  WHERE status NOT IN ('completed', 'failed', 'canceled')
                 ORDER BY started_at DESC
             """))
             rows = result.fetchall()

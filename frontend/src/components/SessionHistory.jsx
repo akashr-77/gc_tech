@@ -11,11 +11,7 @@ function clearHistory() {
   localStorage.removeItem(HISTORY_KEY)
 }
 
-const DOMAIN_ICON = {
-  conference:    '🏛️',
-  music_festival:'🎵',
-  sporting_event:'🏆',
-}
+
 
 function StatusDot({ status }) {
   const color = {
@@ -87,9 +83,6 @@ export default function SessionHistory({ onSelect, activeId }) {
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.2rem' }}>
-                <span style={{ fontSize: '.95rem' }}>
-                  {DOMAIN_ICON[session.domain] || '📋'}
-                </span>
                 <span style={{
                   fontSize: '.88rem', fontWeight: 600, color: 'var(--text)',
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,

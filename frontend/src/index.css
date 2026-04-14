@@ -257,22 +257,10 @@ p  { color: var(--text-muted); }
   margin-bottom: 1.25rem;
 }
 
-.sparkle-icon {
-  color: var(--primary);
-  animation: sparkle-pulse 2s ease-in-out infinite;
-  display: flex;
-  align-items: center;
-}
-
-@keyframes sparkle-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: .6; transform: scale(1.15) rotate(15deg); }
-}
-
 .thinking-toggle {
   display: flex;
   align-items: center;
-  gap: .4rem;
+  justify-content: space-between;
   background: none;
   border: none;
   color: var(--text);
@@ -282,18 +270,21 @@ p  { color: var(--text-muted); }
   padding: .25rem .4rem;
   border-radius: var(--radius-sm);
   transition: background var(--transition);
+  width: 100%;
 }
 .thinking-toggle:hover {
   background: var(--bg-hover);
 }
 
-.thinking-chevron {
-  font-size: .7rem;
-  color: var(--text-muted);
-  transition: transform 0.25s ease;
+.thinking-label {
+  text-align: left;
 }
-.thinking-chevron.open {
-  transform: rotate(180deg);
+
+.thinking-toggle-text {
+  font-size: .72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .4px;
 }
 
 /* Shimmer bars */
@@ -465,6 +456,36 @@ button { cursor: pointer; font-family: inherit; font-size: .9rem; border: none; 
 .btn-outline  { background: transparent; color: var(--primary); border: 1px solid var(--primary); padding: .5rem 1rem; border-radius: var(--radius-sm); }
 .btn-outline:hover { background: rgba(59,130,246,.12); }
 
+.btn-end {
+  background: var(--error);
+  color: #fff;
+  padding: .45rem 1.2rem;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: .85rem;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  transition: all var(--transition);
+}
+.btn-end:hover {
+  background: #dc2626;
+  box-shadow: 0 0 0 3px rgba(239,68,68,.3);
+}
+
+.stopped-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(239,68,68,.1);
+  border: 1px solid rgba(239,68,68,.3);
+  border-radius: var(--radius-sm);
+  padding: .65rem 1rem;
+  margin-bottom: 1rem;
+  color: var(--error);
+  font-size: .88rem;
+  font-weight: 500;
+}
+
 /* ── Cards ───────────────────────────────────────────────────────────────── */
 .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; }
 .card-sm { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1rem; }
@@ -497,6 +518,7 @@ select option { background: var(--bg-card); }
 .badge-completed{ background: rgba(16,185,129,.15); color: var(--success); }
 .badge-failed   { background: rgba(239,68,68,.15);  color: var(--error); }
 .badge-starting { background: rgba(59,130,246,.15); color: var(--primary); }
+.badge-canceled { background: rgba(245,158,11,.15); color: var(--warn); }
 
 /* ── Spinner ─────────────────────────────────────────────────────────────── */
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -522,7 +544,7 @@ select option { background: var(--bg-card); }
   padding: 1.25rem;
 }
 .chevron { font-size: .8rem; color: var(--text-muted); transition: transform var(--transition); }
-.chevron.open { transform: rotate(90deg); }
+.chevron { font-size: .72rem; text-transform: uppercase; letter-spacing: .4px; }
 
 /* ── Tags ────────────────────────────────────────────────────────────────── */
 .tag { display: inline-block; padding: .15rem .55rem; border-radius: 100px; font-size: .75rem; font-weight: 500; background: rgba(59,130,246,.15); color: var(--primary); }

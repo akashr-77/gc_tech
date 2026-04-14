@@ -31,7 +31,7 @@ function Section({ title, icon, badge, defaultOpen = false, children }) {
             <span className="tag">{badge}</span>
           )}
         </div>
-        <span className={`chevron${open ? ' open' : ''}`}>▶</span>
+        <span className="chevron">{open ? 'Hide' : 'Show'}</span>
       </div>
       {open && <div className="section-body">{children}</div>}
     </div>
@@ -66,7 +66,7 @@ function VenueSection({ venues }) {
         <div key={i} className="card-sm">
           <div className="flex-between mb-1">
             <h4>{v.name || `Venue ${i + 1}`}</h4>
-            {v.recommended && <span className="tag" style={{ background: 'rgba(16,185,129,.15)', color: 'var(--success)' }}>⭐ Recommended</span>}
+            {v.recommended && <span className="tag" style={{ background: 'rgba(16,185,129,.15)', color: 'var(--success)' }}>Recommended</span>}
           </div>
           <div className="grid-2" style={{ fontSize: '.88rem' }}>
             {v.location    && <div><span className="text-muted">Location: </span>{v.location}</div>}
@@ -160,7 +160,7 @@ function ScheduleSection({ schedule }) {
     <div>
       {conflicts.length > 0 && (
         <div style={{ background: 'rgba(245,158,11,.1)', border: '1px solid rgba(245,158,11,.3)', borderRadius: 'var(--radius-sm)', padding: '.75rem 1rem', marginBottom: '1rem' }}>
-          <span className="text-warn bold">⚠️ {conflicts.length} conflict(s) detected</span>
+          <span className="text-warn bold">{conflicts.length} conflict(s) detected</span>
           <ul style={{ marginTop: '.35rem', paddingLeft: '1.2rem', fontSize: '.85rem', color: 'var(--text-muted)' }}>
             {conflicts.map((c, i) => <li key={i}>{typeof c === 'string' ? c : JSON.stringify(c)}</li>)}
           </ul>
@@ -278,7 +278,7 @@ export default function ResultsDashboard({ sessionId, sessionData, onBack }) {
     return (
       <div className="card">
         <p className="text-muted">No session data to display.</p>
-        <button className="btn btn-outline mt-2" onClick={onBack}>← Back</button>
+        <button className="btn btn-outline mt-2" onClick={onBack}>New Chat</button>
       </div>
     )
   }
@@ -308,7 +308,7 @@ export default function ResultsDashboard({ sessionId, sessionData, onBack }) {
             {started_at && ` · Started ${new Date(started_at).toLocaleString()}`}
           </p>
         </div>
-        <button className="btn btn-outline" onClick={onBack}>← New Plan</button>
+        <button className="btn btn-outline" onClick={onBack}>New Chat</button>
       </div>
 
       {/* Error state */}
@@ -316,6 +316,13 @@ export default function ResultsDashboard({ sessionId, sessionData, onBack }) {
         <div className="card" style={{ borderColor: 'var(--error)', marginBottom: '1rem' }}>
           <h3 className="text-error mb-1">Planning failed</h3>
           <p className="text-sm">{error || 'Unknown error'}</p>
+        </div>
+      )}
+
+      {status === 'canceled' && (
+        <div className="card" style={{ borderColor: 'var(--warn)', marginBottom: '1rem' }}>
+          <h3 className="text-warn mb-1">Planning stopped</h3>
+          <p className="text-sm">Process stopped by user.</p>
         </div>
       )}
 
@@ -348,35 +355,35 @@ export default function ResultsDashboard({ sessionId, sessionData, onBack }) {
       {/* Accordion sections */}
       {plan && typeof plan === 'object' && (
         <div>
-          <Section title="Event Details"        icon="📌" defaultOpen={true}>
+          <Section title="Event Details"        icon="" defaultOpen={true}>
             <KVGrid data={details} cols={3} />
           </Section>
 
-          <Section title="Venues"               icon="🏛️" badge={plan.venue_options?.length}>
+          <Section title="Venues"               icon="" badge={plan.venue_options?.length}>
             <VenueSection venues={plan.venue_options} />
           </Section>
 
-          <Section title="Ticket Pricing"       icon="💰" badge={plan.ticket_pricing_tiers?.length}>
+          <Section title="Ticket Pricing"       icon="" badge={plan.ticket_pricing_tiers?.length}>
             <PricingSection tiers={plan.ticket_pricing_tiers} forecastUSD={plan.revenue_forecast_usd} />
           </Section>
 
-          <Section title="Speakers"             icon="🎤" badge={plan.speakers?.length}>
+          <Section title="Speakers"             icon="" badge={plan.speakers?.length}>
             <SpeakersSection speakers={plan.speakers} />
           </Section>
 
-          <Section title="Event Schedule"       icon="📅">
+          <Section title="Event Schedule"       icon="">
             <ScheduleSection schedule={plan.schedule} />
           </Section>
 
-          <Section title="Sponsors"             icon="🤝" badge={plan.sponsors?.length}>
+          <Section title="Sponsors"             icon="" badge={plan.sponsors?.length}>
             <SponsorsSection sponsors={plan.sponsors} />
           </Section>
 
-          <Section title="Exhibitors"           icon="🗺️" badge={plan.exhibitors?.length}>
+          <Section title="Exhibitors"           icon="" badge={plan.exhibitors?.length}>
             <ExhibitorsSection exhibitors={plan.exhibitors} />
           </Section>
 
-          <Section title="Community & GTM Strategy" icon="📣">
+          <Section title="Community & GTM Strategy" icon="">
             <CommunitySection strategy={plan.community_gtm_strategy} />
           </Section>
         </div>

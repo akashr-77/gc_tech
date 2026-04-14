@@ -11,11 +11,7 @@ function clearHistory() {
   localStorage.removeItem(HISTORY_KEY)
 }
 
-const DOMAIN_ICON = {
-  conference:     '🏛️',
-  music_festival: '🎵',
-  sporting_event: '🏆',
-}
+
 
 function StatusDot({ status }) {
   const color = {
@@ -85,16 +81,10 @@ export default function ChatSidebar({ isOpen, onToggle, onSelect, onNewChat, act
         {/* New Chat button */}
         <div className="sidebar-top">
           <button className="sidebar-new-chat" onClick={onNewChat} id="new-chat-btn">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
             New Chat
           </button>
           <button className="sidebar-close-btn" onClick={onToggle} title="Close sidebar">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <path d="M9 3v18" />
-            </svg>
+            Close
           </button>
         </div>
 
@@ -102,7 +92,7 @@ export default function ChatSidebar({ isOpen, onToggle, onSelect, onNewChat, act
         <div className="sidebar-sessions">
           {history.length === 0 ? (
             <p className="sidebar-empty">
-              No conversations yet.<br />Start a new plan to begin!
+              No conversations yet.<br />Start a new chat to begin!
             </p>
           ) : (
             <>
@@ -114,11 +104,8 @@ export default function ChatSidebar({ isOpen, onToggle, onSelect, onNewChat, act
                   onClick={() => onSelect(session.id)}
                 >
                   <div className="sidebar-session-row">
-                    <span className="sidebar-session-icon">
-                      {DOMAIN_ICON[session.domain] || '📋'}
-                    </span>
                     <span className="sidebar-session-title">
-                      {session.topic || 'Untitled Plan'}
+                      {session.topic || 'Untitled'}
                     </span>
                     <StatusDot status={session.status} />
                   </div>

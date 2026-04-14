@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import PlanningForm from './components/PlanningForm'
 import ProgressView from './components/ProgressView'
 import ResultsDashboard from './components/ResultsDashboard'
@@ -25,12 +25,18 @@ export default function App() {
   const [sessionId, setSessionId] = useState(null)
   const [sessionData, setSessionData] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [stoppedMsg, setStoppedMsg] = useState(null)
+  const abortRef = useRef(null)
+  const stopRequestedRef = useRef(false)
 
   // Called when the user submits the planning form
   const handlePlanSubmit = (id, input) => {
+    stopRequestedRef.current = false
     setSessionId(id)
     setSessionData(null)
+    setStoppedMsg(null)
     setView('progress')
+    abortRef.current = new AbortController()
     saveToHistory({
       id,
       topic: input.topic,
@@ -43,19 +49,23 @@ export default function App() {
 
   // Called when the ProgressView detects a terminal state
   const handlePlanComplete = (data) => {
+    if (stopRequestedRef.current) return
     setSessionData(data)
     setView('results')
+    abortRef.current = null
     saveToHistory({ id: sessionId, status: data.status })
   }
 
   // Called when the user clicks a past session in the sidebar
   const handleViewSession = async (id) => {
     try {
+      stopRequestedRef.current = false
       const res = await fetch(`/api/sessions/${id}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setSessionId(id)
       setSessionData(data)
+      setStoppedMsg(null)
       if (data.status === 'working' || data.status === 'starting') {
         setView('progress')
       } else {
@@ -67,9 +77,28 @@ export default function App() {
   }
 
   const handleNewChat = () => {
+    stopRequestedRef.current = false
     setSessionId(null)
     setSessionData(null)
+    setStoppedMsg(null)
     setView('home')
+  }
+
+  // END button handler — abort any in-flight work and return home
+  const handleStop = () => {
+    stopRequestedRef.current = true
+    if (sessionId) {
+      void fetch(`/api/sessions/${sessionId}/cancel`, { method: 'POST' })
+        .catch((error) => console.error('Failed to cancel session:', error))
+      saveToHistory({ id: sessionId, status: 'canceled' })
+    }
+    if (abortRef.current) {
+      abortRef.current.abort()
+      abortRef.current = null
+    }
+    setStoppedMsg('Process stopped by user.')
+    setView('home')
+    setSessionData(null)
   }
 
   const toggleSidebar = () => setSidebarOpen((o) => !o)
@@ -103,21 +132,21 @@ export default function App() {
                 </svg>
               </button>
               <div className="logo" onClick={handleNewChat}>
-                <span className="logo-icon">⚡</span>
-                <span className="logo-text">Manhattan Project</span>
+                <span className="logo-text">Intelligent Event Planner</span>
               </div>
             </div>
-            <nav style={{ display: 'flex', gap: '0.5rem' }}>
-              {view !== 'home' && (
-                <button className="btn-ghost" onClick={handleNewChat}>
-                  ← New Plan
-                </button>
-              )}
-            </nav>
           </div>
         </header>
 
         <main className="main">
+          {/* Stopped message banner */}
+          {stoppedMsg && (
+            <div className="stopped-banner">
+              {stoppedMsg}
+              <button className="btn-ghost" style={{ marginLeft: '1rem', fontSize: '.8rem' }} onClick={() => setStoppedMsg(null)}>Dismiss</button>
+            </div>
+          )}
+
           <div className="content-area">
             {view === 'home' && (
               <PlanningForm onSubmit={handlePlanSubmit} />
@@ -126,6 +155,8 @@ export default function App() {
               <ProgressView
                 sessionId={sessionId}
                 onComplete={handlePlanComplete}
+                onStop={handleStop}
+                abortSignal={abortRef.current?.signal}
               />
             )}
             {view === 'results' && (

@@ -88,6 +88,17 @@ class TestSessionFromCheckpoint:
         assert session["status"] == "failed"
         assert session["error"] == "LLM timeout"
 
+    def test_canceled_with_error(self):
+        cp = {
+            "event_input": {"topic": "AI"},
+            "status": "canceled",
+            "started_at": "2025-01-01T00:00:00+00:00",
+            "error_message": "Process stopped by user.",
+        }
+        session = EventOpsAgent._session_from_checkpoint(cp)
+        assert session["status"] == "canceled"
+        assert session["error"] == "Process stopped by user."
+
     def test_completed_at_datetime_object(self):
         """completed_at from asyncpg comes as a datetime, not a string."""
         dt = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
@@ -157,6 +168,7 @@ class TestOrchestratePersistsState:
             self.mock_cp.save_plan = AsyncMock()
             self.mock_cp.save_conflicts = AsyncMock()
             self.mock_cp.mark_failed = AsyncMock()
+            self.mock_cp.mark_canceled = AsyncMock()
             self.agent = EventOpsAgent()
             yield
 
@@ -206,6 +218,25 @@ class TestOrchestratePersistsState:
         self.mock_cp.mark_failed.assert_called_once_with(sid, "LLM boom")
         assert self.agent._active_sessions[sid]["status"] == "failed"
         assert self.agent._active_sessions[sid]["error"] == "LLM boom"
+
+    @pytest.mark.asyncio
+    async def test_canceled_orchestration_marks_checkpoint(self):
+        event_input = _make_event_input()
+        sid = event_input.session_id
+
+        self.agent._active_sessions[sid] = {
+            "input": event_input.dict(),
+            "status": "starting",
+        }
+
+        self.agent._llm_with_tools = AsyncMock(side_effect=asyncio.CancelledError())
+
+        with pytest.raises(asyncio.CancelledError):
+            await self.agent._orchestrate(sid, event_input)
+
+        self.mock_cp.mark_canceled.assert_called_once_with(sid, "Process stopped by user.")
+        assert self.agent._active_sessions[sid]["status"] == "canceled"
+        assert self.agent._active_sessions[sid]["error"] == "Process stopped by user."
 
 
 # ---------------------------------------------------------------------------

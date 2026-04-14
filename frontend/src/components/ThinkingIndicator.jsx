@@ -30,18 +30,12 @@ export default function ThinkingIndicator({ stages, currentStageIndex, isActive 
       {/* Main thinking bubble */}
       <div className="thinking-bubble">
         <div className="thinking-header">
-          <div className="sparkle-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L13.09 8.26L18 6L14.74 10.91L21 12L14.74 13.09L18 18L13.09 15.74L12 22L10.91 15.74L6 18L9.26 13.09L3 12L9.26 10.91L6 6L10.91 8.26L12 2Z"
-                fill="currentColor" />
-            </svg>
-          </div>
           <button
             className="thinking-toggle"
             onClick={() => setDetailsOpen(!detailsOpen)}
           >
             <span className="thinking-label">{currentStage.label}</span>
-            <span className={`thinking-chevron ${detailsOpen ? 'open' : ''}`}>▾</span>
+            <span className="thinking-toggle-text">{detailsOpen ? 'Hide details' : 'Details'}</span>
           </button>
         </div>
 

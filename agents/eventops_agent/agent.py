@@ -4,7 +4,7 @@ import os
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from fastapi import BackgroundTasks, HTTPException
+from fastapi import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from openai import AsyncAzureOpenAI, RateLimitError
 from shared.a2a.models import (
@@ -201,11 +201,12 @@ class EventOpsAgent(A2AServer):
         # of short-circuiting them by querying the database directly.
         self._mcp = MCPConnection(config.mcp_server_url, allowed_tools=EVENTOPS_ALLOWED_TOOLS)
         self._checkpoint = CheckpointStore()
+        self._orchestration_tasks: dict[str, asyncio.Task] = {}
 
         # ─── API Routes ──────────────────────────────────────────────────
 
         @self.app.post("/plan")
-        async def plan_conference(event_input: EventInput, background_tasks: BackgroundTasks):
+        async def plan_conference(event_input: EventInput):
             session_id = event_input.session_id or str(uuid.uuid4())
             self._active_sessions[session_id] = {
                 "input": event_input.dict(),
@@ -213,7 +214,13 @@ class EventOpsAgent(A2AServer):
                 "started_at": datetime.now(timezone.utc).isoformat()
             }
             await self._checkpoint.create(session_id, event_input.dict())
-            background_tasks.add_task(self._orchestrate, session_id, event_input)
+            task = asyncio.create_task(self._orchestrate(session_id, event_input))
+            self._orchestration_tasks[session_id] = task
+
+            def _cleanup(_task: asyncio.Task, sid: str = session_id) -> None:
+                self._orchestration_tasks.pop(sid, None)
+
+            task.add_done_callback(_cleanup)
             return {"session_id": session_id, "status": "started"}
 
         @self.app.get("/sessions/{session_id}")
@@ -228,6 +235,26 @@ class EventOpsAgent(A2AServer):
                 self._active_sessions[session_id] = session
                 return session
             raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+
+        @self.app.post("/sessions/{session_id}/cancel")
+        async def cancel_session(session_id: str):
+            session = self._active_sessions.get(session_id)
+            if session is None:
+                checkpoint = await self._checkpoint.load(session_id)
+                if checkpoint is None:
+                    raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+                session = self._session_from_checkpoint(checkpoint)
+                self._active_sessions[session_id] = session
+
+            if session.get("status") in ("completed", "failed", "canceled"):
+                return session
+
+            task = self._orchestration_tasks.get(session_id)
+            if task and not task.done():
+                task.cancel()
+
+            await self._mark_session_canceled(session_id, "Process stopped by user.")
+            return self._active_sessions[session_id]
 
     # ─── Startup / Shutdown ──────────────────────────────────────────────────
 
@@ -274,6 +301,13 @@ class EventOpsAgent(A2AServer):
 
     async def _on_shutdown(self):
         await self._mcp.disconnect()
+
+    async def _mark_session_canceled(self, session_id: str, reason: str) -> None:
+        session = self._active_sessions.setdefault(session_id, {})
+        session["status"] = "canceled"
+        session["error"] = reason
+        session["completed_at"] = datetime.now(timezone.utc).isoformat()
+        await self._checkpoint.mark_canceled(session_id, reason)
 
     # ─── Checkpoint ↔ Session Conversion ────────────────────────────────────
 
@@ -339,7 +373,7 @@ class EventOpsAgent(A2AServer):
                 )
                 await asyncio.sleep(delay)
 
-    async def _llm_with_tools(self, user_message: str) -> str:
+    async def _llm_with_tools(self, session_id: str, user_message: str) -> str:
         """Run the LLM in an autonomous tool-use loop.
 
         All tools come from MCP — including discover_agents, ask_agent,
@@ -357,6 +391,9 @@ class EventOpsAgent(A2AServer):
         ]
 
         for iteration in range(MAX_TOOL_LOOP_ITERATIONS):
+            if self._active_sessions.get(session_id, {}).get("status") == "canceled":
+                raise asyncio.CancelledError()
+
             is_penultimate = iteration == MAX_TOOL_LOOP_ITERATIONS - 2
 
             response = await self._llm_create_with_retry(
@@ -382,6 +419,8 @@ class EventOpsAgent(A2AServer):
 
             async def _exec_tool(tc):
                 try:
+                    if self._active_sessions.get(session_id, {}).get("status") == "canceled":
+                        raise asyncio.CancelledError()
                     call_args = json.loads(tc.function.arguments)
                     print(
                         f"[EventOps] 🛠️  Calling MCP tool '{tc.function.name}' "
@@ -457,7 +496,9 @@ class EventOpsAgent(A2AServer):
                 {"agent": "llm_orchestrator", "task": "autonomous_tool_loop",
                  "status": "executing"}
             ])
-            raw_plan = await self._llm_with_tools(user_message)
+            raw_plan = await self._llm_with_tools(session_id, user_message)
+            if session.get("status") == "canceled":
+                raise asyncio.CancelledError()
             session["final_plan"] = self._extract_json(raw_plan)
             session["status"] = "completed"
             session["completed_at"] = datetime.now(timezone.utc).isoformat()
@@ -465,7 +506,14 @@ class EventOpsAgent(A2AServer):
                                                   if isinstance(session["final_plan"], dict)
                                                   else {"result": session["final_plan"]})
 
+        except asyncio.CancelledError:
+            await self._mark_session_canceled(session_id, "Process stopped by user.")
+            raise
+
         except Exception as e:
+            if session.get("status") == "canceled":
+                await self._mark_session_canceled(session_id, "Process stopped by user.")
+                raise asyncio.CancelledError()
             session["status"] = "failed"
             session["error"] = str(e)
             await self._checkpoint.mark_failed(session_id, str(e))
@@ -479,7 +527,7 @@ class EventOpsAgent(A2AServer):
         if task.messages and task.messages[0].parts:
             user_message = task.messages[0].parts[0].text
 
-        result = await self._llm_with_tools(user_message)
+        result = await self._llm_with_tools(str(uuid.uuid4()), user_message)
         artifact = Artifact(
             name="eventops_response",
             parts=[TextPart(text=result)]

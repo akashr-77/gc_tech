@@ -181,7 +181,7 @@ export default function PlanningForm({ onSubmit }) {
           disabled={loading}
           style={{ alignSelf: 'flex-start', padding: '.75rem 2rem', fontSize: '1rem' }}
         >
-          {loading ? '⏳ Submitting…' : '⚡ Generate Event Plan'}
+          {loading ? 'Submitting…' : 'Generate Event Plan'}
         </button>
       </form>
     </div>
