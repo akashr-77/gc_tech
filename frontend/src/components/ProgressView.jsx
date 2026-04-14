@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import ThinkingIndicator from './ThinkingIndicator'
 
 const POLL_INTERVAL_MS = 3000
 
@@ -91,7 +92,7 @@ export default function ProgressView({ sessionId, onComplete }) {
   const isRunning = status === 'starting' || status === 'working'
 
   return (
-    <div>
+    <div className="progress-view">
       <div className="flex-between mb-2">
         <div>
           <h2>{STATUS_ICON[status] || '⏳'} {STATUS_LABEL[status] || status}</h2>
@@ -114,53 +115,16 @@ export default function ProgressView({ sessionId, onComplete }) {
       )}
 
       {isRunning && (
-        <div className="card">
-          {/* Spinner */}
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '1.5rem 0' }}>
-            <div className="spinner" style={{ width: '56px', height: '56px' }} />
-          </div>
+        <div className="card" style={{ padding: '2rem 1.5rem' }}>
+          {/* Thinking Indicator replaces the old spinner + stage list */}
+          <ThinkingIndicator
+            stages={AGENT_STAGES}
+            currentStageIndex={stageIdx}
+            isActive={isRunning}
+          />
 
-          <p style={{ textAlign: 'center', marginBottom: '1.5rem', color: 'var(--text-muted)' }}>
-            The agent swarm is autonomously planning your event. This typically takes 3–8 minutes.
-          </p>
-
-          {/* Stage tracker */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem' }}>
-            {AGENT_STAGES.map((stage, idx) => {
-              const done    = idx < stageIdx
-              const current = idx === stageIdx
-              const pending = idx > stageIdx
-              return (
-                <div key={stage.key} style={{
-                  display: 'flex', alignItems: 'center', gap: '.75rem',
-                  padding: '.55rem .85rem', borderRadius: 'var(--radius-sm)',
-                  background: current ? 'rgba(59,130,246,.12)' : 'transparent',
-                  border: current ? '1px solid rgba(59,130,246,.3)' : '1px solid transparent',
-                  opacity: pending ? .4 : 1,
-                  transition: 'all .3s ease',
-                }}>
-                  <span style={{ fontSize: '1.1rem', width: '24px', textAlign: 'center' }}>
-                    {done ? '✅' : current ? stage.icon : '⭕'}
-                  </span>
-                  <span style={{
-                    fontSize: '.9rem',
-                    color: done ? 'var(--success)' : current ? 'var(--text)' : 'var(--text-muted)',
-                    fontWeight: current ? 600 : 400,
-                  }}>
-                    {stage.label}
-                  </span>
-                  {current && (
-                    <span style={{ marginLeft: 'auto', fontSize: '.75rem', color: 'var(--primary)' }}>
-                      ● working
-                    </span>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          <p className="text-sm text-muted mt-2" style={{ textAlign: 'center', marginTop: '1.25rem' }}>
-            ✨ Tip: Agents run in parallel — results will appear once all specialists finish.
+          <p className="text-sm text-muted" style={{ textAlign: 'center', marginTop: '1.5rem' }}>
+            ✨ The agent swarm is autonomously planning your event. This typically takes 3–8 minutes.
           </p>
         </div>
       )}

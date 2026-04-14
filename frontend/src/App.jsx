@@ -2,7 +2,7 @@ import { useState } from 'react'
 import PlanningForm from './components/PlanningForm'
 import ProgressView from './components/ProgressView'
 import ResultsDashboard from './components/ResultsDashboard'
-import SessionHistory from './components/SessionHistory'
+import ChatSidebar from './components/ChatSidebar'
 
 // Simple session history stored in localStorage
 const HISTORY_KEY = 'mp_sessions'
@@ -24,6 +24,7 @@ export default function App() {
   const [view, setView] = useState('home')   // 'home' | 'progress' | 'results'
   const [sessionId, setSessionId] = useState(null)
   const [sessionData, setSessionData] = useState(null)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
 
   // Called when the user submits the planning form
   const handlePlanSubmit = (id, input) => {
@@ -65,27 +66,59 @@ export default function App() {
     }
   }
 
+  const handleNewChat = () => {
+    setSessionId(null)
+    setSessionData(null)
+    setView('home')
+  }
+
+  const toggleSidebar = () => setSidebarOpen((o) => !o)
+
   return (
     <div className="app">
-      <header className="header">
-        <div className="header-inner">
-          <div className="logo" onClick={() => setView('home')}>
-            <span className="logo-icon">⚡</span>
-            <span className="logo-text">Manhattan Project</span>
-          </div>
-          <nav style={{ display: 'flex', gap: '0.5rem' }}>
-            {view !== 'home' && (
-              <button className="btn-ghost" onClick={() => setView('home')}>
-                ← New Plan
-              </button>
-            )}
-          </nav>
-        </div>
-      </header>
+      {/* Left sidebar */}
+      <ChatSidebar
+        isOpen={sidebarOpen}
+        onToggle={toggleSidebar}
+        onSelect={handleViewSession}
+        onNewChat={handleNewChat}
+        activeId={sessionId}
+      />
 
-      <main className="main">
-        <div className="layout">
-          <div className="content">
+      {/* Main area shifts when sidebar is open */}
+      <div className={`app-main ${sidebarOpen ? 'sidebar-open' : ''}`}>
+        <header className="header">
+          <div className="header-inner">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              {/* Sidebar toggle */}
+              <button
+                id="sidebar-toggle-btn"
+                className="btn-ghost sidebar-toggle"
+                onClick={toggleSidebar}
+                title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <path d="M9 3v18" />
+                </svg>
+              </button>
+              <div className="logo" onClick={handleNewChat}>
+                <span className="logo-icon">⚡</span>
+                <span className="logo-text">Manhattan Project</span>
+              </div>
+            </div>
+            <nav style={{ display: 'flex', gap: '0.5rem' }}>
+              {view !== 'home' && (
+                <button className="btn-ghost" onClick={handleNewChat}>
+                  ← New Plan
+                </button>
+              )}
+            </nav>
+          </div>
+        </header>
+
+        <main className="main">
+          <div className="content-area">
             {view === 'home' && (
               <PlanningForm onSubmit={handlePlanSubmit} />
             )}
@@ -99,19 +132,12 @@ export default function App() {
               <ResultsDashboard
                 sessionId={sessionId}
                 sessionData={sessionData}
-                onBack={() => setView('home')}
+                onBack={handleNewChat}
               />
             )}
           </div>
-
-          <aside className="sidebar">
-            <SessionHistory
-              onSelect={handleViewSession}
-              activeId={sessionId}
-            />
-          </aside>
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   )
 }
