@@ -3,8 +3,7 @@ import os
 import json
 import re
 import httpx
-from functools import lru_cache
-from pathlib import Path
+from datetime import date as date_cls
 from openai import AsyncAzureOpenAI
 from mcp.server.fastmcp import FastMCP
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -26,67 +25,6 @@ openai_client = AsyncAzureOpenAI(
     api_key=config.azure_openai_api_key,
     api_version=config.azure_openai_api_version
 )
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-EVENT_DATASET_PATHS = [
-    PROJECT_ROOT / "dataset" / "all_events_final.json",
-    PROJECT_ROOT / "all_events_final.json",
-]
-
-
-@lru_cache(maxsize=1)
-def _load_event_dataset() -> list[dict]:
-    for path in EVENT_DATASET_PATHS:
-        if not path.exists():
-            continue
-
-        with path.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
-
-        if isinstance(data, list):
-            return data
-
-        if isinstance(data, dict):
-            for key in ("events", "items", "data", "results"):
-                candidate = data.get(key)
-                if isinstance(candidate, list):
-                    return candidate
-            return [data]
-
-    raise FileNotFoundError(
-        "Could not find all_events_final.json in dataset/ or the project root"
-    )
-
-
-def _event_matches(event: dict, *, query: str | None = None,
-                   name: str | None = None, category: str | None = None,
-                   country: str | None = None, location: str | None = None,
-                   source: str | None = None, date: str | None = None) -> bool:
-    def _contains(field_value, needle: str) -> bool:
-        return needle.casefold() in str(field_value or "").casefold()
-
-    if query:
-        haystack = " ".join(
-            str(event.get(field, ""))
-            for field in ("name", "description", "category", "location", "country", "source", "url")
-        ).casefold()
-        if query.casefold() not in haystack:
-            return False
-
-    for field_name, field_value in (
-        ("name", name),
-        ("category", category),
-        ("country", country),
-        ("location", location),
-        ("source", source),
-    ):
-        if field_value and not _contains(event.get(field_name), field_value):
-            return False
-
-    if date and str(event.get("date", "")) != date:
-        return False
-
-    return True
 
 # ─── WEB SEARCH ───────────────────────────────────────────────────────────────
 
@@ -547,24 +485,51 @@ async def query_event_dataset(query: str = None, name: str = None,
                               category: str = None, country: str = None,
                               location: str = None, source: str = None,
                               date: str = None, limit: int = 20) -> list[dict]:
-    """Query the JSON event database by free-text or field filters."""
-    events = _load_event_dataset()
-    matches = [
-        event for event in events
-        if _event_matches(
-            event,
-            query=query,
-            name=name,
-            category=category,
-            country=country,
-            location=location,
-            source=source,
-            date=date,
+    """Query the SQL-backed events table with lexical filters and text search."""
+    where_clauses = []
+    params: dict = {}
+
+    if query:
+        where_clauses.append(
+            "(" \
+            "search_tsv @@ websearch_to_tsquery('english', :query) OR " \
+            "name ILIKE :query_like OR description ILIKE :query_like OR " \
+            "category ILIKE :query_like OR location ILIKE :query_like OR " \
+            "country ILIKE :query_like OR source ILIKE :query_like" \
+            ")"
         )
-    ]
-    if limit is None or limit < 0:
-        return matches
-    return matches[:limit]
+        params["query"] = query
+        params["query_like"] = f"%{query}%"
+
+    for column_name, value in (
+        ("name", name),
+        ("category", category),
+        ("country", country),
+        ("location", location),
+        ("source", source),
+    ):
+        if value:
+            where_clauses.append(f"{column_name} ILIKE :{column_name}")
+            params[column_name] = f"%{value}%"
+
+    if date:
+        try:
+            params["event_date"] = date_cls.fromisoformat(date)
+        except ValueError:
+            params["event_date"] = date
+        where_clauses.append("event_date = :event_date")
+
+    sql_parts = ["SELECT raw_event FROM events"]
+    if where_clauses:
+        sql_parts.append("WHERE " + " AND ".join(where_clauses))
+    sql_parts.append("ORDER BY event_date DESC NULLS LAST, name ASC")
+    if limit is not None and limit >= 0:
+        sql_parts.append("LIMIT :limit")
+        params["limit"] = limit
+
+    async with session_factory() as session:
+        result = await session.execute(text("\n".join(sql_parts)), params)
+        return [row._mapping["raw_event"] for row in result.fetchall()]
 
 @mcp.tool()
 async def get_pricing_benchmark(domain: str, geography: str,

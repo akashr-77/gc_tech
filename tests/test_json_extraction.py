@@ -89,6 +89,13 @@ class TestExtractJsonFunction:
         result = extract_json(raw)
         assert result == raw
 
+    def test_skips_unmatched_brace_and_finds_later_json(self):
+        """A stray unmatched brace before valid JSON should not stop extraction."""
+        raw = 'noise { not json here and no closer\nthen later {"venue": "Grand Hall"}'
+        result = extract_json(raw)
+        parsed = json.loads(result)
+        assert parsed["venue"] == "Grand Hall"
+
     def test_empty_string(self):
         """Empty string should pass through."""
         result = extract_json("")

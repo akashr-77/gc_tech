@@ -285,11 +285,52 @@ export default function ResultsDashboard({ sessionId, sessionData, onBack }) {
 
   const { status, input, final_plan, error, started_at, completed_at } = sessionData
 
-  // Normalise plan — it might be a JSON string or already an object
-  let plan = final_plan
-  if (typeof plan === 'string') {
-    try { plan = JSON.parse(plan) } catch (e) { console.error('Failed to parse final_plan JSON:', e) }
+  // Robust JSON extractor — mirrors the backend extract_json logic so that
+  // even if the backend stored final_plan as a raw string (e.g. older
+  // checkpoint, LLM wrapping JSON in markdown fences, or preamble text),
+  // the frontend can still parse and render it properly.
+  const tryParseJSON = (raw) => {
+    if (raw == null) return raw
+    if (typeof raw === 'object') return raw  // already parsed
+
+    // 1. Direct parse
+    try { return JSON.parse(raw) } catch (_) {}
+
+    // 2. Strip markdown code fences: ```json ... ``` or ``` ... ```
+    const fenceMatch = raw.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/)
+    if (fenceMatch) {
+      try { return JSON.parse(fenceMatch[1].trim()) } catch (_) {}
+    }
+
+    // 3. String-aware brace matching (skip braces inside "...")
+    let searchFrom = 0
+    while (true) {
+      const start = raw.indexOf('{', searchFrom)
+      if (start === -1) break
+      let depth = 0, inStr = false, i = start
+      while (i < raw.length) {
+        const ch = raw[i]
+        if (inStr) {
+          if (ch === '\\') { i += 2; continue }
+          if (ch === '"') inStr = false
+        } else {
+          if (ch === '"') inStr = true
+          else if (ch === '{') depth++
+          else if (ch === '}') { depth--; if (depth === 0) break }
+        }
+        i++
+      }
+      if (depth === 0 && i < raw.length) {
+        try { return JSON.parse(raw.slice(start, i + 1)) } catch (_) {}
+      }
+      searchFrom = start + 1
+    }
+
+    return raw  // truly unparseable — return as-is
   }
+
+  // Normalise plan — it might be a JSON string or already an object
+  let plan = tryParseJSON(final_plan)
 
   const details = plan?.event_details ?? input ?? {}
 
@@ -299,7 +340,7 @@ export default function ResultsDashboard({ sessionId, sessionData, onBack }) {
       <div className="flex-between mb-2" style={{ marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem', marginBottom: '.35rem' }}>
-            <h2 style={{ margin: 0 }}>{details.topic || 'Event Plan'}</h2>
+            <h2 style={{ margin: 0 }}>{details.topic || details.event_name || 'Event Plan'}</h2>
             <span className={`badge badge-${status}`}>{status}</span>
           </div>
           <p className="text-sm text-muted">
@@ -345,10 +386,14 @@ export default function ResultsDashboard({ sessionId, sessionData, onBack }) {
         </div>
       )}
 
-      {/* If plan is still a raw string, just show it */}
+      {/* If plan is still a raw string after all parse attempts, show it nicely */}
       {typeof plan === 'string' && (
-        <div className="card">
-          <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: '.85rem', color: 'var(--text-muted)' }}>{plan}</pre>
+        <div className="card" style={{ borderColor: 'rgba(245,158,11,.3)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginBottom: '.75rem' }}>
+            <span style={{ color: 'var(--warn)', fontWeight: 600 }}>Raw Output</span>
+            <span className="text-sm text-muted">— could not parse structured data from the agent response</span>
+          </div>
+          <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: '.85rem', color: 'var(--text-muted)', maxHeight: '60vh', overflow: 'auto' }}>{plan}</pre>
         </div>
       )}
 

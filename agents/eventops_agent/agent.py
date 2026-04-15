@@ -150,7 +150,12 @@ Return ONLY the raw JSON object. Do NOT include:
 - Markdown code fences (no ```json``` wrappers)
 - Commentary or explanation outside the JSON structure
 
-Your entire response must be parseable by json.loads() with no preprocessing.
+Your entire response must be strictly valid JSON parseable by json.loads():
+- Preserve the schema types exactly.
+- ALL strings must be wrapped in double quotes.
+- Numeric fields such as `budget_usd`, `target_audience`, `revenue_forecast_usd`, `price_usd`, and `capacity` must stay numbers unless the schema explicitly says otherwise.
+- NEVER leave text unquoted (e.g. wrong: `"capacity": 1000 indoor`; right: `"capacity": "1000 indoor"`).
+- NO trailing commas.
 The JSON must follow this exact top-level structure:
 {
   "event_details": { ... },

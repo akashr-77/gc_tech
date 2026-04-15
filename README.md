@@ -29,8 +29,9 @@ An autonomous multi-agent system that plans conferences, festivals, and sporting
     ┌──────────────────────▼─────────────────────────────────────┐
     │              PostgreSQL + pgvector  :5432                   │
     │  agent_memories · working_memory · procedural_rules         │
-    │  venues · sponsors · speakers · communities · pricing_models│
-    │  orchestration_checkpoints · reactive_events · agent_registry│
+    │  events · venues · sponsors · speakers · communities        │
+    │  pricing_models · orchestration_checkpoints                  │
+    │  reactive_events · agent_registry                            │
     └────────────────────────────────────────────────────────────┘
 ```
 
@@ -96,7 +97,17 @@ This starts (in dependency order):
 
 Wait for all containers to show `healthy` status (~60–90 seconds on first run).
 
-### 3. Run a test planning session
+### 3. Load the event dataset
+
+The event planning agents now query a SQL-backed `events` table instead of scanning the JSON file directly. Load the dataset once after the stack is up:
+
+```bash
+docker compose run --rm --no-deps mcp-server python scripts/import_events.py
+```
+
+This import reads [dataset/all_events_final.json](dataset/all_events_final.json), truncates the repurposed `events` table, and upserts the normalized rows with search indexes for `ILIKE`, `event_date`, and full-text lookup.
+
+### 4. Run a test planning session
 
 ```bash
 python scripts/test_flow.py
@@ -171,7 +182,7 @@ The MCP server exposes tools via SSE at `/sse`. All web tools are **free and req
 | `read_github_repo` | Read a GitHub repo's README or any file |
 | `vector_search` | Semantic search over agent memory |
 | `write_memory` | Store facts in episodic memory |
-| `query_event_dataset` | Search the local JSON event database |
+| `query_event_dataset` | Search the SQL-backed events table |
 | `query_venues` | Query structured venue database |
 | `query_sponsors` | Query sponsor database |
 | `query_speakers` | Query speaker database |
@@ -201,12 +212,23 @@ See [`.env.example`](.env.example) for the complete list. Key variables:
 
 ---
 
+## Data Pipeline
+
+The dataset pipeline is:
+
+1. The raw JSON event feed is stored in [dataset/all_events_final.json](dataset/all_events_final.json).
+2. [scripts/import_events.py](scripts/import_events.py) normalizes each record and writes it into PostgreSQL.
+3. [mcp_server/server.py](mcp_server/server.py) exposes `query_event_dataset`, which queries the `events` table with `ILIKE`, `event_date`, and `search_tsv` filters.
+4. EventOps can call that tool during planning to retrieve only the relevant records.
+
 ## Data
 
 The system seeds the database with:
 - **Procedural rules** (`database/004_seed_memory.sql`): GDPR, medical compliance, budget guidelines, sponsorship policies, DEI requirements
 - **Episodic memories** (`database/004_seed_memory.sql`): Lessons learned from past events (WiFi failures, pricing mistakes, channel strategy)
-- **Reference dataset** (`dataset/all_events_final.json`): JSON event database used by the MCP server for similar-event lookups
+- **Reference dataset** (`dataset/all_events_final.json`): Imported into the SQL-backed `events` table for similar-event lookups
+
+To refresh the table from the JSON source, run `docker compose run --rm --no-deps mcp-server python scripts/import_events.py`.
 
 To add more seed data to the vector store after startup, call the `write_memory` MCP tool or use the `vector_search` / `query_past_experiences` tools.
 

@@ -17,19 +17,39 @@ CREATE INDEX ON agent_memories (namespace);
 -- ─── STRUCTURED / PROCEDURAL DATA ────────────────────────────────────────────
 CREATE TABLE events (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source          TEXT,
+    url             TEXT UNIQUE,
     name            TEXT NOT NULL,
-    domain          TEXT NOT NULL,    -- 'conference', 'music_festival', 'sporting_event'
+    description     TEXT,
+    category        TEXT,
+    location        TEXT,
+    country         TEXT,
+    event_date      DATE,
+    speakers        JSONB DEFAULT '[]'::jsonb,
+    exhibitors      JSONB DEFAULT '[]'::jsonb,
+    ticket_price    JSONB DEFAULT '[]'::jsonb,
+    expected_turnaround TEXT,
+    search_tsv      TSVECTOR DEFAULT ''::tsvector,
+    raw_event       JSONB NOT NULL DEFAULT '{}'::jsonb,
+    domain          TEXT,
     topic           TEXT,
     geography       TEXT,
     city            TEXT,
-    country         TEXT,
     start_date      DATE,
     end_date        DATE,
     budget_usd      BIGINT,
     target_audience INT,
     website         TEXT,
-    created_at      TIMESTAMPTZ DEFAULT NOW()
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_events_name ON events (name);
+CREATE INDEX IF NOT EXISTS idx_events_category ON events (category);
+CREATE INDEX IF NOT EXISTS idx_events_country ON events (country);
+CREATE INDEX IF NOT EXISTS idx_events_location ON events (location);
+CREATE INDEX IF NOT EXISTS idx_events_source ON events (source);
+CREATE INDEX IF NOT EXISTS idx_events_event_date ON events (event_date);
+CREATE INDEX IF NOT EXISTS idx_events_search_tsv ON events USING GIN (search_tsv);
 
 CREATE TABLE venues (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

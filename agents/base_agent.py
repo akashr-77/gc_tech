@@ -20,6 +20,39 @@ MAX_TOOL_RESULT_CHARS = 20000  # truncate individual tool results to stay within
 _JSON_FENCE_PATTERN = re.compile(r"```(?:json(?!\w))?\s*\n?(.*?)\n?\s*```", re.DOTALL)
 
 
+def _find_matching_brace(text: str, start: int) -> int:
+    """Find the matching closing brace for an opening '{' at position `start`.
+
+    Unlike a naive brace counter this properly skips characters that appear
+    inside JSON string literals (delimited by '"'), including escaped
+    characters such as '\"'.  Returns the index of the matching '}', or
+    -1 if no match is found.
+    """
+    depth = 0
+    in_string = False
+    i = start
+    length = len(text)
+    while i < length:
+        ch = text[i]
+        if in_string:
+            if ch == '\\':          # skip escaped character
+                i += 2
+                continue
+            if ch == '"':
+                in_string = False
+        else:
+            if ch == '"':
+                in_string = True
+            elif ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    return i
+        i += 1
+    return -1
+
+
 def extract_json(raw: str) -> dict | str:
     """Extract clean JSON from an LLM's raw response.
 
@@ -27,10 +60,19 @@ def extract_json(raw: str) -> dict | str:
     - Preamble text before the JSON (e.g. "Here is the plan...")
     - Markdown code fences (```json ... ```)
     - Trailing text after the JSON
+    - Curly braces inside JSON string values
 
     Returns the parsed dict when valid JSON is found, or the
     original string if no valid JSON could be extracted.
     """
+    # 0. Quick check — maybe the whole thing is already valid JSON
+    stripped = raw.strip()
+    if stripped.startswith("{"):
+        try:
+            return json.loads(stripped)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     # 1. Strip markdown code fences
     fenced = _JSON_FENCE_PATTERN.search(raw)
     if fenced:
@@ -40,24 +82,25 @@ def extract_json(raw: str) -> dict | str:
         except (json.JSONDecodeError, TypeError):
             pass
 
-    # 2. Find the outermost JSON object by brace matching
-    start = raw.find("{")
-    if start != -1:
-        depth = 0
-        end = start
-        for i in range(start, len(raw)):
-            if raw[i] == "{":
-                depth += 1
-            elif raw[i] == "}":
-                depth -= 1
-                if depth == 0:
-                    end = i
-                    break
+    # 2. Find the outermost JSON object using string-aware brace matching.
+    #    Try every '{' in the text (earliest first) until we find one whose
+    #    matching '}' yields valid JSON.  This handles preamble text and
+    #    avoids mis-matching on braces inside string values.
+    search_from = 0
+    while True:
+        start = raw.find("{", search_from)
+        if start == -1:
+            break
+        end = _find_matching_brace(raw, start)
+        if end == -1:
+            search_from = start + 1
+            continue
         candidate = raw[start:end + 1]
         try:
             return json.loads(candidate)
         except (json.JSONDecodeError, TypeError):
-            pass
+            # This '{' didn't lead to valid JSON; try the next one
+            search_from = start + 1
 
     # 3. Fallback: return original string
     return raw

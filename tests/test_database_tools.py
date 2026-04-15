@@ -170,7 +170,7 @@ class TestQueryCommunities:
 
 
 class TestQueryEventDataset:
-    """Verify the JSON-backed event database query helper."""
+    """Verify the SQL-backed event database query helper."""
 
     @pytest.mark.asyncio
     async def test_filters_by_text_and_fields(self):
@@ -192,13 +192,25 @@ class TestQueryEventDataset:
                 "date": "2026-06-01",
             },
         ]
+        row = MagicMock()
+        row._mapping = {"raw_event": events[0]}
+        fake_session = AsyncMock()
+        fake_result = MagicMock()
+        fake_result.fetchall.return_value = [row]
+        fake_session.execute = AsyncMock(return_value=fake_result)
+        fake_session.__aenter__ = AsyncMock(return_value=fake_session)
+        fake_session.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("mcp_server.server._load_event_dataset", return_value=events):
+        with patch("mcp_server.server.session_factory", return_value=fake_session):
             from mcp_server.server import query_event_dataset
-            results = await query_event_dataset(query="ai", category="conference", limit=5)
+            results = await query_event_dataset(query="ai", category="conference", date="2026-04-12", limit=5)
 
         assert len(results) == 1
         assert results[0]["name"] == "AI Summit 2026"
+        executed_sql = str(fake_session.execute.call_args[0][0])
+        assert "FROM events" in executed_sql
+        assert "search_tsv @@ websearch_to_tsquery" in executed_sql
+        assert "event_date = :event_date" in executed_sql
 
     @pytest.mark.asyncio
     async def test_limit_applies_after_filtering(self):
@@ -213,13 +225,26 @@ class TestQueryEventDataset:
             }
             for idx in range(1, 4)
         ]
+        rows = []
+        for event in events[:2]:
+            row = MagicMock()
+            row._mapping = {"raw_event": event}
+            rows.append(row)
+        fake_session = AsyncMock()
+        fake_result = MagicMock()
+        fake_result.fetchall.return_value = rows
+        fake_session.execute = AsyncMock(return_value=fake_result)
+        fake_session.__aenter__ = AsyncMock(return_value=fake_session)
+        fake_session.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("mcp_server.server._load_event_dataset", return_value=events):
+        with patch("mcp_server.server.session_factory", return_value=fake_session):
             from mcp_server.server import query_event_dataset
             results = await query_event_dataset(category="conference", limit=2)
 
         assert len(results) == 2
         assert results[0]["name"] == "Event 1"
+        executed_sql = str(fake_session.execute.call_args[0][0])
+        assert "LIMIT :limit" in executed_sql
 
 
 # ---------------------------------------------------------------------------
