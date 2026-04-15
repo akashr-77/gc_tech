@@ -9,6 +9,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text
 
 from shared.config import build_default_database_url
+import dotenv 
+dotenv.load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", build_default_database_url()).replace("postgresql://", "postgresql+asyncpg://")
 engine = create_async_engine(DATABASE_URL)
